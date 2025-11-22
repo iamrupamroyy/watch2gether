@@ -17,7 +17,7 @@
             <div class="card">
                 <h2>Create a New Room</h2>
                 <div class="form-group">
-                    <input type="text" id="video-url-input" placeholder="Paste a Google Drive shareable link or direct video URL">
+                    <input type="text" id="video-url-input" placeholder="Paste a direct video link (e.g., from archive.org)">
                     <button id="create-room-btn">Create Room</button>
                 </div>
             </div>
@@ -36,6 +36,15 @@
             <h2 id="room-info"></h2>
             <div id="video-container">
                 <video id="video-player" controls></video>
+            </div>
+            <div class="controls-container">
+                <button id="sync-btn">Force Sync</button>
+            </div>
+            <div id="users-progress" class="users-progress">
+                <h3>Users in Room:</h3>
+                <ul id="user-list">
+                    <!-- User progress will be listed here -->
+                </ul>
             </div>
             <p id="error-message" class="error"></p>
         </div>
