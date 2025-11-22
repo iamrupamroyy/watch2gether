@@ -58,9 +58,10 @@ io.on('connection', (socket) => {
 
         room.users.set(socket.id, { id: socket.id, username: finalUsername, currentTime: 0 });
         socket.join(newRoomCode);
+        io.to(newRoomCode).emit('waitingForUsers'); // Immediately tell the creator to wait
 
         socket.emit('roomCreated', { roomCode: newRoomCode, videoUrl: videoUrl, isHost: true });
-        console.log(`Room created: ${newRoomCode} by host ${finalUsername}`);
+        console.log(`Room created: ${newRoomCode} by host ${username}`);
         broadcastUsersUpdate(newRoomCode);
     });
 
