@@ -38,16 +38,20 @@ io.on('connection', (socket) => {
         }
         currentRoomCode = newRoomCode;
 
-        rooms[newRoomCode] = {
+        const room = {
             id: newRoomCode,
-            hostId: socket.id, // The creator is the host
+            hostId: socket.id,
             videoUrl: videoUrl,
             state: { isPlaying: false, currentTime: 0, lastUpdate: Date.now() },
             users: new Map(),
+            // Start a timer to broadcast user progress every 2 seconds
+            syncInterval: setInterval(() => {
+                broadcastUsersUpdate(newRoomCode);
+            }, 2000)
         };
+        rooms[newRoomCode] = room;
 
-        // Add creator to the room
-        rooms[newRoomCode].users.set(socket.id, { id: socket.id, username: username || `User-${socket.id.substring(0,4)}` });
+        room.users.set(socket.id, { id: socket.id, username: username || `User-${socket.id.substring(0,4)}`, currentTime: 0 });
         socket.join(newRoomCode);
 
         socket.emit('roomCreated', { roomCode: newRoomCode, videoUrl: videoUrl, isHost: true });
@@ -107,11 +111,15 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log(`Socket disconnected: ${socket.id}`);
         if (currentRoomCode && rooms[currentRoomCode]) {
-            rooms[currentRoomCode].users.delete(socket.id);
-            if (rooms[currentRoomCode].users.size === 0) {
+            const room = rooms[currentRoomCode];
+            room.users.delete(socket.id);
+
+            if (room.users.size === 0) {
+                clearInterval(room.syncInterval); // Stop the interval
                 delete rooms[currentRoomCode];
                 console.log(`Room ${currentRoomCode} is empty and has been deleted.`);
             } else {
+                // Broadcast updated user list to remaining users
                 broadcastUsersUpdate(currentRoomCode);
             }
         }
