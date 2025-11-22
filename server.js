@@ -25,13 +25,16 @@ function broadcastUsersUpdate(roomCode) {
     }
 }
 
-function checkAllReadyAndPlay(roomCode, room) {
-    if (room.users.size > 0 && room.readyUsers.size === room.users.size) {
+function checkAllReadyAndPlay(roomCode) {
+    const room = rooms[roomCode];
+    if (room && room.users.size > 0 && room.readyUsers.size === room.users.size) {
         console.log(`All users in room ${roomCode} are ready. Starting video.`);
+        // Set playing to true and update the room state
         const newState = { ...room.state, isPlaying: true, lastUpdate: Date.now() };
         room.state = newState;
+        // Broadcast the new state to all clients, which will hide overlay and autoplay
         io.to(roomCode).emit('sync', newState);
-        io.to(roomCode).emit('allUsersReady'); // Tell clients they can enable controls
+        io.to(roomCode).emit('allUsersReady'); // Keep this to ensure UI updates (e.g. controls)
     }
 }
 
