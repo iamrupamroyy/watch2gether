@@ -1,0 +1,14 @@
+{
+  "name": "simple-watch2gether",
+  "version": "1.0.0",
+  "description": "A simple synchronized video watcher.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
