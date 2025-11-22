@@ -14,18 +14,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const hostControls = document.getElementById('host-controls');
     const syncBtn = document.getElementById('sync-btn');
     const userList = document.getElementById('user-list');
+    const waitingOverlay = document.getElementById('waiting-overlay');
 
     // --- State Variables ---
     let currentRoomCode = null;
     let timeUpdateInterval = null;
     let isSeeking = false;
-    let serverState = { isPlaying: false, currentTime: 0, lastUpdate: Date.now() }; // Local cache of server state
+    let serverState = { isPlaying: false, currentTime: 0, lastUpdate: Date.now() };
 
     // --- Core Functions ---
     function showRoomView() {
         welcomeView.classList.add('hidden');
         roomView.classList.remove('hidden');
-        videoPlayer.focus();
     }
 
     function formatTime(seconds) {
@@ -69,10 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Socket Event Handlers ---
-    socket.on('connect', () => {
-        userId = socket.id;
-    });
-    
     socket.on('roomCreated', ({ roomCode, videoUrl, isHost }) => {
         currentRoomCode = roomCode;
         roomInfo.innerHTML = `Room Code: <strong>${roomCode}</strong> (Share this!)`;
@@ -88,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentRoomCode = roomCode;
         roomInfo.textContent = `You are in room: ${roomCode}`;
         videoPlayer.src = videoUrl;
-        updateAndCorrect(playbackState); // Use the robust sync handler
+        updateAndCorrect(playbackState);
         showRoomView();
         startSendingTimeUpdates();
     });
@@ -113,37 +109,35 @@ document.addEventListener('DOMContentLoaded', () => {
             userList.appendChild(li);
         });
     });
+    
+    socket.on('waitingForUsers', () => {
+        console.log('Waiting for all users to be ready...');
+        waitingOverlay.classList.remove('hidden');
+        videoPlayer.controls = false;
+    });
+
+    socket.on('allUsersReady', () => {
+        console.log('All users are ready!');
+        waitingOverlay.classList.add('hidden');
+        videoPlayer.controls = true;
+    });
 
     socket.on('error', (message) => alert(message));
     socket.on('disconnect', () => clearInterval(timeUpdateInterval));
 
-    // --- The New Robust Sync/Correction Logic ---
+    // --- Robust Sync/Correction Logic ---
     function updateAndCorrect(newState) {
-        serverState = newState; // Always update our local cache of the server's state
-
-        // Calculate where the video *should* be right now
+        serverState = newState;
         const timeSinceUpdate = (Date.now() - new Date(serverState.lastUpdate).getTime()) / 1000;
         const expectedTime = serverState.currentTime + (serverState.isPlaying ? timeSinceUpdate : 0);
         
         const drift = videoPlayer.currentTime - expectedTime;
-        const DRIFT_SEEK_THRESHOLD = 1.5;  // If off by more than 1.5s, hard seek
-        const DRIFT_RATE_THRESHOLD = 0.2; // If off by more than 0.2s, adjust playback speed
+        const DRIFT_SEEK_THRESHOLD = 1.5;
         
-        // --- Correction Step 1: Time (The most important) ---
         if (Math.abs(drift) > DRIFT_SEEK_THRESHOLD) {
-            console.warn(`[SYNC] Large drift of ${drift.toFixed(2)}s detected. Forcing seek.`);
             videoPlayer.currentTime = expectedTime;
-            videoPlayer.playbackRate = 1;
-        } else if (Math.abs(drift) > DRIFT_RATE_THRESHOLD) {
-            console.log(`[SYNC] Minor drift of ${drift.toFixed(2)}s detected. Adjusting playback rate.`);
-            // If we are ahead, slow down. If we are behind, speed up.
-            videoPlayer.playbackRate = drift > 0 ? 0.9 : 1.1;
-        } else {
-            videoPlayer.playbackRate = 1; // We are in sync, ensure normal speed
         }
 
-        // --- Correction Step 2: Play/Pause State ---
-        // This should run after time correction
         if (serverState.isPlaying && videoPlayer.paused) {
             videoPlayer.play().catch(e => console.error("Sync play error:", e));
         } else if (!serverState.isPlaying && !videoPlayer.paused) {
@@ -154,8 +148,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Client-Side Action Emitters ---
     function emitPlaybackAction(action) {
         if (!currentRoomCode) return;
-        // The user's action feels instant locally, but we immediately tell the server.
-        // The server will then broadcast back the authoritative state.
         socket.emit('playbackAction', { 
             roomCode: currentRoomCode, 
             action: action, 
@@ -166,20 +158,29 @@ document.addEventListener('DOMContentLoaded', () => {
     function startSendingTimeUpdates() {
         if (timeUpdateInterval) clearInterval(timeUpdateInterval);
         timeUpdateInterval = setInterval(() => {
-            if (!videoPlayer.paused) {
+            if (!videoPlayer.paused && !videoPlayer.seeking) {
                 socket.emit('timeUpdate', {
                     roomCode: currentRoomCode,
                     currentTime: videoPlayer.currentTime
                 });
             }
-        }, 2000); // Send an update every 2 seconds
+        }, 2000);
     }
-
+    
+    // --- Video Player Event Listeners ---
     videoPlayer.addEventListener('play', () => emitPlaybackAction('play'));
     videoPlayer.addEventListener('pause', () => !isSeeking && emitPlaybackAction('pause'));
     videoPlayer.addEventListener('seeking', () => isSeeking = true);
     videoPlayer.addEventListener('seeked', () => {
         isSeeking = false;
         emitPlaybackAction('seek');
+    });
+    
+    // "Ready Check" listener
+    videoPlayer.addEventListener('canplaythrough', () => {
+        console.log('Video is ready to play through.');
+        if (currentRoomCode) {
+            socket.emit('clientReady', { roomCode: currentRoomCode });
+        }
     });
 });
