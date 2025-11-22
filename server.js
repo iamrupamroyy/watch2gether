@@ -72,26 +72,25 @@ io.on('connection', (socket) => {
             newRoomCode = generateRoomCode();
         }
 
-        let fileId = null;
-        // Transform Google Drive URL to get the file ID
+        let streamUrl;
+
+        // Check if it's a Google Drive link to proxy it
         if (videoUrl.includes('drive.google.com/file/d/')) {
             try {
-                fileId = videoUrl.split('/d/')[1].split('/')[0];
+                const fileId = videoUrl.split('/d/')[1].split('/')[0];
+                streamUrl = `/stream/${fileId}`; // Use our local proxy
             } catch (e) {
                 socket.emit('error', 'Invalid Google Drive link format.');
                 return;
             }
         } else {
-            socket.emit('error', 'Please provide a valid Google Drive shareable link.');
-            return;
+            // Otherwise, assume it's a direct link and use it as-is
+            streamUrl = videoUrl;
         }
-
-        // The URL for the video player will now be our local proxy
-        const localStreamUrl = `/stream/${fileId}`;
         
         rooms[newRoomCode] = {
             id: newRoomCode,
-            videoUrl: localStreamUrl, // Store the proxy URL
+            videoUrl: streamUrl, // Store the correct URL (either proxy or direct)
             state: {
                 isPlaying: false,
                 currentTime: 0,
@@ -101,8 +100,7 @@ io.on('connection', (socket) => {
         };
 
         socket.join(newRoomCode);
-        // Send the proxy URL to the client
-        socket.emit('roomCreated', { roomCode: newRoomCode, videoUrl: localStreamUrl });
+        socket.emit('roomCreated', { roomCode: newRoomCode, videoUrl: streamUrl });
         console.log(`Room created: ${newRoomCode}`);
     });
 
