@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const hostControls = document.getElementById('host-controls');
     const syncBtn = document.getElementById('sync-btn');
     const userList = document.getElementById('user-list');
-    const waitingOverlay = document.getElementById('waiting-overlay');
 
     // --- State Variables ---
     let currentRoomCode = null;
@@ -110,18 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
-    socket.on('waitingForUsers', () => {
-        console.log('Waiting for all users to be ready...');
-        waitingOverlay.classList.remove('hidden');
-        videoPlayer.controls = false;
-    });
-
-    socket.on('allUsersReady', () => {
-        console.log('All users are ready!');
-        waitingOverlay.classList.add('hidden');
-        videoPlayer.controls = true;
-    });
-
     socket.on('error', (message) => alert(message));
     socket.on('disconnect', () => clearInterval(timeUpdateInterval));
 

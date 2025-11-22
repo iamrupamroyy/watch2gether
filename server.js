@@ -25,18 +25,7 @@ function broadcastUsersUpdate(roomCode) {
     }
 }
 
-function checkAllReadyAndPlay(roomCode) {
-    const room = rooms[roomCode];
-    if (room && room.users.size > 0 && room.readyUsers.size === room.users.size) {
-        console.log(`All users in room ${roomCode} are ready. Starting video.`);
-        // Set playing to true and update the room state
-        const newState = { ...room.state, isPlaying: true, lastUpdate: Date.now() };
-        room.state = newState;
-        // Broadcast the new state to all clients, which will hide overlay and autoplay
-        io.to(roomCode).emit('sync', newState);
-        io.to(roomCode).emit('allUsersReady'); // Keep this to ensure UI updates (e.g. controls)
-    }
-}
+
 
 io.on('connection', (socket) => {
     console.log(`Socket connected: ${socket.id}`);
@@ -61,7 +50,6 @@ io.on('connection', (socket) => {
 
         room.users.set(socket.id, { id: socket.id, username: finalUsername, currentTime: 0 });
         socket.join(newRoomCode);
-        io.to(newRoomCode).emit('waitingForUsers'); // Immediately tell the creator to wait
 
         socket.emit('roomCreated', { roomCode: newRoomCode, videoUrl: videoUrl, isHost: true });
         console.log(`Room created: ${newRoomCode} by host ${username}`);
@@ -74,17 +62,6 @@ io.on('connection', (socket) => {
         
         currentRoomCode = roomCode;
         const finalUsername = clientUsername || username;
-
-        // If video is already playing, pause it for everyone until the new user is ready
-        if (room.state.isPlaying) {
-            console.log(`Pausing room ${roomCode} for new user ${finalUsername}`);
-            room.state.isPlaying = false;
-            room.state.lastUpdate = Date.now();
-            io.to(roomCode).emit('sync', room.state);
-        }
-        // When a new user joins, everyone (including the new user) is no longer ready
-        room.readyUsers.clear();
-        io.to(roomCode).emit('waitingForUsers');
 
         room.users.set(socket.id, { id: socket.id, username: finalUsername, currentTime: 0 });
         socket.join(roomCode);
@@ -101,11 +78,9 @@ io.on('connection', (socket) => {
 
     socket.on('clientReady', ({ roomCode }) => {
         const room = rooms[roomCode];
-        if (room && !room.readyUsers.has(socket.id)) {
+        if (room) {
             console.log(`User ${username} in room ${roomCode} is ready.`);
             room.readyUsers.add(socket.id);
-            // Check if everyone is now ready
-            checkAllReadyAndPlay(roomCode, room);
         }
     });
 
@@ -113,19 +88,11 @@ io.on('connection', (socket) => {
         const room = rooms[roomCode];
         if (!room) return;
 
-        // NEW: Prevent play if not everyone is ready
-        if (action === 'play' && room.readyUsers.size !== room.users.size) {
-            return socket.emit('error', 'Waiting for all users to be ready.');
-        }
-
         let newState;
         if (action === 'play') newState = { isPlaying: true, currentTime, lastUpdate: Date.now() };
         if (action === 'pause') newState = { isPlaying: false, currentTime, lastUpdate: Date.now() };
         if (action === 'seek') {
             newState = { ...room.state, currentTime, lastUpdate: Date.now() };
-            // After a seek, reset the ready state so everyone must buffer again
-            room.readyUsers.clear();
-            io.to(roomCode).emit('waitingForUsers');
         }
 
         if (newState) {
@@ -170,8 +137,6 @@ io.on('connection', (socket) => {
                 } else {
                     // Broadcast updated user list to remaining users
                     broadcastUsersUpdate(roomCode);
-                    // Check if the remaining users are now all ready
-                    checkAllReadyAndPlay(roomCode);
                 }
                 // Once found and handled, break the loop
                 break; 
