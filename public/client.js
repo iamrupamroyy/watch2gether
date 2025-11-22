@@ -18,8 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorMessage = document.getElementById('error-message');
 
     let currentRoomCode = null;
-    let isHost = false;
     let lastSeekTime = 0;
+    let lastActionSent = null; // Used to ignore our own sync events
 
     // --- Navigation ---
     function showRoomView() {
@@ -31,7 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
     createRoomBtn.addEventListener('click', () => {
         const videoUrl = videoUrlInput.value.trim();
         if (videoUrl) {
-            isHost = true;
             socket.emit('createRoom', { videoUrl });
         } else {
             alert('Please provide a video URL.');
@@ -50,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Socket Event Handlers ---
     socket.on('roomCreated', ({ roomCode, videoUrl }) => {
         currentRoomCode = roomCode;
-        roomInfo.textContent = `You are the host. Room Code: ${roomCode}`;
+        roomInfo.innerHTML = `Room Code: <strong id="room-code-display">${roomCode}</strong> (Share this with friends!)`;
         videoPlayer.src = videoUrl;
         showRoomView();
     });
@@ -60,11 +59,13 @@ document.addEventListener('DOMContentLoaded', () => {
         roomInfo.textContent = `You are in room: ${roomCode}`;
         videoPlayer.src = videoUrl;
         
-        // Sync initial state
         if (playbackState) {
-            videoPlayer.currentTime = playbackState.currentTime;
+            const timeSinceUpdate = (Date.now() - playbackState.lastUpdate) / 1000;
+            const expectedTime = playbackState.currentTime + (playbackState.isPlaying ? timeSinceUpdate : 0);
+            videoPlayer.currentTime = expectedTime;
+            
             if (playbackState.isPlaying) {
-                videoPlayer.play().catch(e => console.error("Playback error:", e));
+                videoPlayer.play().catch(e => console.error("Playback error on join:", e));
             } else {
                 videoPlayer.pause();
             }
@@ -73,9 +74,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('sync', (state) => {
-        if (isHost) return; // Host drives the state, doesn't listen for syncs
+        // A simple mechanism to ignore a sync event that we likely just triggered
+        if (lastActionSent) {
+            const timeSinceAction = Date.now() - lastActionSent.time;
+            if (timeSinceAction < 500) { // If action was sent in the last 500ms
+                if (lastActionSent.action === 'play' && state.isPlaying) return;
+                if (lastActionSent.action === 'pause' && !state.isPlaying) return;
+            }
+        }
+        
+        // Correct for drift if it's significant (more than 1 second)
+        const drift = Math.abs(videoPlayer.currentTime - state.currentTime);
+        if (drift > 1) {
+            videoPlayer.currentTime = state.currentTime;
+        }
 
-        videoPlayer.currentTime = state.currentTime;
         if (state.isPlaying && videoPlayer.paused) {
             videoPlayer.play().catch(e => console.error("Sync play error:", e));
         } else if (!state.isPlaying && !videoPlayer.paused) {
@@ -84,49 +97,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('error', (message) => {
-        errorMessage.textContent = message;
-        setTimeout(() => errorMessage.textContent = '', 3000);
+        alert(message);
     });
 
-    // --- Video Player Event Listeners (for the host) ---
+    // --- Video Player Event Listeners (for everyone) ---
     function isReadyForEvent() {
-        // Prevents spamming seek events
         const now = Date.now();
-        if (now - lastSeekTime < 500) {
+        if (now - lastSeekTime < 500) { // Debounce seek events
             return false;
         }
         lastSeekTime = now;
         return true;
     }
 
+    function emitPlaybackAction(action) {
+        lastActionSent = { action, time: Date.now() };
+        socket.emit('playbackAction', { 
+            roomCode: currentRoomCode, 
+            action: action, 
+            currentTime: videoPlayer.currentTime 
+        });
+    }
+
     videoPlayer.addEventListener('play', () => {
-        if (isHost) {
-            socket.emit('playbackAction', { 
-                roomCode: currentRoomCode, 
-                action: 'play', 
-                currentTime: videoPlayer.currentTime 
-            });
-        }
+        emitPlaybackAction('play');
     });
 
     videoPlayer.addEventListener('pause', () => {
-        // Don't emit pause event on seek
-        if (isHost && !videoPlayer.seeking) {
-            socket.emit('playbackAction', { 
-                roomCode: currentRoomCode, 
-                action: 'pause', 
-                currentTime: videoPlayer.currentTime 
-            });
+        if (!videoPlayer.seeking) { // Do not send pause event while seeking
+            emitPlaybackAction('pause');
         }
     });
 
+
+
     videoPlayer.addEventListener('seeked', () => {
-        if (isHost && isReadyForEvent()) {
-            socket.emit('playbackAction', { 
-                roomCode: currentRoomCode, 
-                action: 'seek', 
-                currentTime: videoPlayer.currentTime 
-            });
+        if (isReadyForEvent()) {
+            emitPlaybackAction('seek');
         }
     });
 });

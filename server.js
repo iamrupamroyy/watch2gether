@@ -139,8 +139,9 @@ io.on('connection', (socket) => {
 
             if (newState) {
                 room.state = newState;
+                // Broadcast the new state to everyone in the room
                 io.to(roomCode).emit('sync', newState);
-                console.log(`Playback action in room ${roomCode}:`, newState);
+                console.log(`Playback action from ${socket.id} in room ${roomCode}:`, newState);
             }
         }
     });
