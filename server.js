@@ -22,22 +22,35 @@ app.get('/stream/:fileId', async (req, res) => {
 
         console.log(`Proxying request for fileId: ${fileId}`);
 
-        // Make a request to Google Drive and get the response as a stream
         const response = await axios({
             method: 'get',
             url: googleDriveUrl,
             responseType: 'stream',
         });
 
-        // Set the content type header to what Google Drive provides
+        console.log('Successfully connected to Google Drive URL. Piping stream to client...');
+
         res.setHeader('Content-Type', response.headers['content-type']);
 
-        // Pipe the stream from Google Drive directly to the client's response
+        response.data.on('data', (chunk) => {
+          // This will log the size of each chunk of video data received
+          // console.log(`Received chunk of size: ${chunk.length}`);
+        });
+
+        response.data.on('error', (err) => {
+            console.error('[ERROR] Error in stream from Google Drive:', err.message);
+            if (!res.headersSent) {
+                res.status(500).send('Stream from source failed.');
+            }
+        });
+
         response.data.pipe(res);
 
     } catch (error) {
-        console.error('Error proxying stream:', error.message);
-        res.status(500).send('Error fetching video stream.');
+        console.error('[ERROR] Failed to initiate stream proxy:', error.message);
+        if (!res.headersSent) {
+            res.status(500).send('Error initiating video stream.');
+        }
     }
 });
 
