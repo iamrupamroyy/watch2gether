@@ -16,59 +16,71 @@ document.addEventListener('DOMContentLoaded', () => {
     const roomInfo = document.getElementById('room-info');
     const videoPlayer = document.getElementById('video-player');
     const errorMessage = document.getElementById('error-message');
-    const syncBtn = document.getElementById('sync-btn'); // NEW Sync button
-    const userList = document.getElementById('user-list'); // NEW User list for progress
+    const hostControls = document.getElementById('host-controls'); // Host-only controls container
+    const syncBtn = document.getElementById('sync-btn');
+    const userList = document.getElementById('user-list');
 
     let currentRoomCode = null;
-    let lastSeekTime = 0;
-    let lastActionSent = null; // Used to prevent immediate re-sync from own actions
-    let userId = socket.id; // Store this client's unique ID
-    let timeUpdateInterval = null; // For periodic time updates
+    let timeUpdateInterval = null;
+    let isSeeking = false;
+    let lastSentAction = null;
 
-    // --- Navigation ---
+    // --- Utility Functions ---
     function showRoomView() {
         welcomeView.classList.add('hidden');
         roomView.classList.remove('hidden');
-        videoPlayer.focus(); // Focus player for keyboard controls
     }
 
-    // --- Utility: Format time ---
     function formatTime(seconds) {
+        if (isNaN(seconds) || seconds < 0) return "00:00";
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = Math.floor(seconds % 60);
         return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
     }
 
-    // --- Event Listeners ---
+    // --- User Actions ---
+    function getUsername() {
+        let username = localStorage.getItem('watch2gether_username');
+        if (!username) {
+            username = prompt("Please enter your name for this session:", `User${Math.floor(Math.random() * 1000)}`);
+            if (username) {
+                localStorage.setItem('watch2gether_username', username);
+            }
+        }
+        return username || `User${socket.id.substring(0,4)}`;
+    }
+
     createRoomBtn.addEventListener('click', () => {
         const videoUrl = videoUrlInput.value.trim();
-        if (videoUrl) {
-            socket.emit('createRoom', { videoUrl });
-        } else {
-            alert('Please provide a video URL.');
-        }
+        if (!videoUrl) return alert('Please provide a video URL.');
+        const username = getUsername();
+        socket.emit('createRoom', { videoUrl, username });
     });
 
     joinRoomBtn.addEventListener('click', () => {
         const roomCode = roomCodeInput.value.trim().toUpperCase();
-        if (roomCode) {
-            socket.emit('joinRoom', { roomCode });
-        } else {
-            alert('Please enter a room code.');
-        }
+        if (!roomCode) return alert('Please enter a room code.');
+        const username = getUsername();
+        socket.emit('joinRoom', { roomCode, username });
     });
 
-    syncBtn.addEventListener('click', () => { // NEW Sync button listener
+    syncBtn.addEventListener('click', () => {
         if (currentRoomCode && videoPlayer) {
-            emitPlaybackAction('forceSync'); // Use the same action emitter
+            socket.emit('forceSync', {
+                roomCode: currentRoomCode,
+                currentTime: videoPlayer.currentTime
+            });
         }
     });
 
     // --- Socket Event Handlers ---
-    socket.on('roomCreated', ({ roomCode, videoUrl }) => {
+    socket.on('roomCreated', ({ roomCode, videoUrl, isHost }) => {
         currentRoomCode = roomCode;
-        roomInfo.innerHTML = `Room Code: <strong id="room-code-display">${roomCode}</strong> (Share this with friends!)`;
+        roomInfo.innerHTML = `Room Code: <strong>${roomCode}</strong> (Share this with friends!)`;
         videoPlayer.src = videoUrl;
+        if (isHost) {
+            hostControls.classList.remove('hidden');
+        }
         showRoomView();
         startSendingTimeUpdates();
     });
@@ -77,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentRoomCode = roomCode;
         roomInfo.textContent = `You are in room: ${roomCode}`;
         videoPlayer.src = videoUrl;
-        
+
         if (playbackState) {
             const timeSinceUpdate = (Date.now() - playbackState.lastUpdate) / 1000;
             const expectedTime = playbackState.currentTime + (playbackState.isPlaying ? timeSinceUpdate : 0);
@@ -85,40 +97,20 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (playbackState.isPlaying) {
                 videoPlayer.play().catch(e => console.error("Playback error on join:", e));
-            } else {
-                videoPlayer.pause();
             }
         }
         showRoomView();
         startSendingTimeUpdates();
     });
 
-    socket.on('sync', (state) => { // Authoritative sync event
-        // If this sync event was triggered by our own recent action, ignore it
-        if (lastActionSent && state.lastUpdate >= lastActionSent.time) {
-             const timeDiff = Date.now() - lastActionSent.time;
-             if (timeDiff < 500) { // Give some leeway for network latency
-                lastActionSent = null; // Clear to allow future syncs
-                return;
-             }
+    socket.on('sync', (state) => {
+        if (lastActionSent && (Date.now() - lastActionSent.time < 1000)) {
+            return; // Ignore syncs that immediately follow our own actions
         }
 
-        const timeSinceUpdate = (Date.now() - state.lastUpdate) / 1000;
-        const expectedTime = state.currentTime + (state.isPlaying ? timeSinceUpdate : 0);
-        
-        const drift = Math.abs(videoPlayer.currentTime - expectedTime);
-        const SYNC_THRESHOLD = 0.5; // If drift is more than 0.5 seconds, force seek
-        const RATE_ADJUST_THRESHOLD = 0.2; // If drift is more than 0.2 seconds, adjust rate
-
-        if (drift > SYNC_THRESHOLD) {
-            videoPlayer.currentTime = expectedTime;
-            console.log(`[SYNC] Forced seek due to ${drift.toFixed(2)}s drift.`);
-        } else if (drift > RATE_ADJUST_THRESHOLD) {
-            videoPlayer.playbackRate = 1 + (drift / 2); // Small adjustment
-            setTimeout(() => videoPlayer.playbackRate = 1, 500); // Reset after a bit
-            console.log(`[SYNC] Adjusted rate due to ${drift.toFixed(2)}s drift.`);
-        } else {
-            videoPlayer.playbackRate = 1; // Ensure normal rate
+        const drift = Math.abs(videoPlayer.currentTime - state.currentTime);
+        if (drift > 1.5) { // Only sync if drift is significant
+            videoPlayer.currentTime = state.currentTime;
         }
 
         if (state.isPlaying && videoPlayer.paused) {
@@ -128,40 +120,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    socket.on('roomStateUpdate', ({ roomState, usersProgress }) => { // NEW Room state update
-        // Update user list display
-        userList.innerHTML = ''; // Clear current list
-        usersProgress.forEach(userP => {
+    socket.on('usersUpdate', (users) => {
+        userList.innerHTML = '';
+        const videoDuration = videoPlayer.duration;
+        users.forEach(user => {
             const li = document.createElement('li');
-            const progressRatio = videoPlayer.duration ? (userP.currentTime / videoPlayer.duration) : 0;
-            const progressBarFillWidth = (progressRatio * 100).toFixed(0);
+            const progressPercent = videoDuration ? (user.currentTime / videoDuration) * 100 : 0;
+            const isYou = user.id === socket.id;
 
             li.innerHTML = `
-                <span class="user-name">${userP.username} ${userP.username === userId.substring(0, 5) ? '(You)' : ''}</span>
+                <span class="user-name">${user.username} ${isYou ? '(You)' : ''}</span>
                 <div class="user-progress-bar">
-                    <div class="user-progress-bar-fill" style="width: ${progressBarFillWidth}%"></div>
+                    <div class="user-progress-bar-fill" style="width: ${progressPercent}%"></div>
                 </div>
-                <span class="user-time">${formatTime(userP.currentTime)} / ${formatTime(videoPlayer.duration)}</span>
+                <span class="user-time">${formatTime(user.currentTime)}</span>
             `;
             userList.appendChild(li);
         });
     });
-
-    socket.on('error', (message) => {
-        errorMessage.textContent = message;
-        setTimeout(() => errorMessage.textContent = '', 3000);
+    
+    socket.on('error', (message) => alert(message));
+    socket.on('disconnect', () => {
+        if (timeUpdateInterval) clearInterval(timeUpdateInterval);
     });
 
-    // --- Video Player Event Listeners (for everyone) ---
-    function isReadyForEvent() {
-        const now = Date.now();
-        if (now - lastSeekTime < 500) { // Debounce seek events
-            return false;
-        }
-        lastSeekTime = now;
-        return true;
-    }
-
+    // --- Video Player Event Emitters ---
     function emitPlaybackAction(action) {
         lastActionSent = { action, time: Date.now() };
         socket.emit('playbackAction', { 
@@ -171,39 +154,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // NEW: Function to send periodic time updates
     function startSendingTimeUpdates() {
         if (timeUpdateInterval) clearInterval(timeUpdateInterval);
         timeUpdateInterval = setInterval(() => {
-            if (currentRoomCode && videoPlayer && !videoPlayer.paused && !videoPlayer.seeking) {
+            if (!videoPlayer.paused && !videoPlayer.seeking) {
                 socket.emit('timeUpdate', {
                     roomCode: currentRoomCode,
                     currentTime: videoPlayer.currentTime
                 });
             }
-        }, 3000); // Send update every 3 seconds
+        }, 2000); // Send update every 2 seconds
     }
 
-    // Stop sending updates on disconnect
-    socket.on('disconnect', () => {
-        if (timeUpdateInterval) clearInterval(timeUpdateInterval);
-        timeUpdateInterval = null;
-    });
-
-
-    videoPlayer.addEventListener('play', () => {
-        emitPlaybackAction('play');
-    });
-
-    videoPlayer.addEventListener('pause', () => {
-        if (!videoPlayer.seeking) {
-            emitPlaybackAction('pause');
-        }
-    });
-
+    videoPlayer.addEventListener('play', () => emitPlaybackAction('play'));
+    videoPlayer.addEventListener('pause', () => !isSeeking && emitPlaybackAction('pause'));
+    videoPlayer.addEventListener('seeking', () => isSeeking = true);
     videoPlayer.addEventListener('seeked', () => {
-        if (isReadyForEvent()) {
-            emitPlaybackAction('seek');
-        }
+        isSeeking = false;
+        emitPlaybackAction('seek');
     });
 });
