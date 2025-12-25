@@ -8,8 +8,8 @@ function App() {
   const [availableRooms, setAvailableRooms] = useState([]);
 
   useEffect(() => {
-    // The server will send the room list on connection,
-    // so we no longer need to request it manually.
+    // These listeners are set up once and use functional updates
+    // to avoid issues with stale state in closures.
 
     function onRoomCreated(newRoom) {
       setRoom(newRoom);
@@ -24,31 +24,37 @@ function App() {
     }
 
     function onStateUpdate(updatedRoom) {
-      // Ensure we only update the room state if we are actually in that room
-      if (room && room.id === updatedRoom.id) {
-        setRoom(updatedRoom);
-      }
+      setRoom(prevRoom => {
+        if (prevRoom && prevRoom.id === updatedRoom.id) {
+          return updatedRoom;
+        }
+        return prevRoom;
+      });
     }
     
     function onUserJoined(data) {
-      if (room) {
-        setRoom(prevRoom => ({...prevRoom, users: [...prevRoom.users, {id: data.userId, isHost: false}]}));
-      }
+      setRoom(prevRoom => {
+        if (prevRoom) {
+          return {...prevRoom, users: [...prevRoom.users, {id: data.userId, isHost: false}]};
+        }
+        return prevRoom;
+      });
     }
 
     function onUserLeft(data) {
-      if (room) {
-        setRoom(prevRoom => {
-            const newUsers = prevRoom.users.filter(user => user.id !== data.userId);
-            if(data.newHostId) {
-                const newHostIndex = newUsers.findIndex(user => user.id === data.newHostId);
-                if(newHostIndex !== -1) {
-                    newUsers[newHostIndex].isHost = true;
-                }
+      setRoom(prevRoom => {
+        if (prevRoom) {
+          const newUsers = prevRoom.users.filter(user => user.id !== data.userId);
+          if (data.newHostId) {
+            const newHostIndex = newUsers.findIndex(user => user.id === data.newHostId);
+            if (newHostIndex !== -1) {
+              newUsers[newHostIndex].isHost = true;
             }
-            return {...prevRoom, users: newUsers};
-        });
-      }
+          }
+          return {...prevRoom, users: newUsers};
+        }
+        return prevRoom;
+      });
     }
 
     socket.on('room-created', onRoomCreated);
@@ -66,7 +72,7 @@ function App() {
       socket.off('user-joined', onUserJoined);
       socket.off('user-left', onUserLeft);
     };
-  }, [room]); // Add `room` to dependency array to re-evaluate listeners if room state changes
+  }, []); // Empty dependency array ensures this effect runs only once.
 
   const handleCreateRoom = () => {
     socket.emit('create-room');
