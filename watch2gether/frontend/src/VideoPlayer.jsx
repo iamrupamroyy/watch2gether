@@ -204,7 +204,11 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
                 <div className="video-section">
                     {room.videoUrl ? (
                     <div ref={playerContainerRef} className="video-player-container" onMouseEnter={() => setShowControls(true)} onMouseLeave={() => setShowControls(false)}>
-                        <video ref={videoRef} src={room.videoUrl} width="100%" preload="metadata" onClick={!room.isPlaying ? handlePlayRequest : handlePauseRequest} crossOrigin="anonymous">
+                        {/* crossOrigin is needed for subtitles to work on cross-origin videos,
+                            but it also requires the video server to have a permissive CORS policy.
+                            Removing it to prioritize video playback for a wider range of sources. */}
+                        <video ref={videoRef} src={room.videoUrl} width="100%" preload="metadata" onClick={!room.isPlaying ? handlePlayRequest : handlePauseRequest}>
+                            <track ref={subtitleTrackRef} kind="subtitles" srcLang="en" label="Subtitles" />
                             Your browser does not support the video tag.
                         </video>
                       

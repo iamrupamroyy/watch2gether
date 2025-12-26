@@ -20,6 +20,20 @@
   background-color: var(--background-primary);
 }
 
+.app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    width: 100%;
+}
+
+main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
 [data-theme="light"] {
   --background-primary: #f9f9f9;
   --background-secondary: #ffffff;
@@ -40,8 +54,10 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
-  background-color: var(--background-primary);
   color: var(--text-primary);
+  background: var(--background-primary);
+  background-image: radial-gradient(circle at top left, rgba(100, 108, 255, 0.1), transparent 30%),
+                    radial-gradient(circle at bottom right, rgba(168, 127, 251, 0.1), transparent 40%);
 }
 
 #root {
@@ -60,7 +76,7 @@ button {
   font-family: inherit;
   background-color: var(--background-tertiary);
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: border-color 0.25s, background-color 0.25s;
 }
 button:hover {
   border-color: var(--accent-primary);
@@ -75,6 +91,7 @@ input {
     font-family: inherit;
     background-color: var(--background-tertiary);
     color: var(--text-primary);
+    transition: all 0.25s;
 }
 
 /* Lobby styles */
@@ -93,6 +110,25 @@ input {
   width: 100%;
   max-width: 500px;
   text-align: center;
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.lobby-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 16px;
+    border: 2px solid transparent;
+    background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary)) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    pointer-events: none;
 }
 
 .lobby-card h1 {
@@ -196,6 +232,12 @@ input {
     box-sizing: border-box; /* Ensures padding doesn't affect final width */
     text-align: center;
     font-size: 1.2em;
+}
+
+.username-form input:focus {
+    outline: none;
+    border-color: var(--accent-secondary);
+    box-shadow: 0 0 10px rgba(168, 127, 251, 0.3);
 }
 
 button:disabled {

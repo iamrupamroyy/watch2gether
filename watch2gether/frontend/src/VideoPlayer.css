@@ -163,29 +163,20 @@
 
 .room-main-content {
     display: flex;
+    flex-wrap: wrap;
     gap: 1.5rem;
+    justify-content: center;
 }
 
 .video-section {
-    flex-grow: 1;
+    flex: 3 1 700px; /* flex-grow, flex-shrink, flex-basis */
 }
 
 .user-list-section {
-    flex-shrink: 0;
-    width: 300px;
+    flex: 1 1 300px;
 }
 
 /* Responsive layout for smaller screens */
-@media (max-width: 900px) {
-    .room-main-content {
-        flex-direction: column;
-    }
-
-    .user-list-section {
-        width: 100%;
-    }
-}
-
 @media (max-width: 600px) {
     .room-header {
         flex-direction: column;

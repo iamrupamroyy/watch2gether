@@ -4,6 +4,8 @@ import { socket } from './socket';
 import VideoPlayer from './VideoPlayer';
 import ThemeToggler from './ThemeToggler';
 
+import Footer from './Footer';
+
 function App() {
   const [room, setRoom] = useState(null);
   const [availableRooms, setAvailableRooms] = useState([]);
@@ -114,50 +116,53 @@ function App() {
   return (
     <div className="app-container">
       <ThemeToggler />
-      {!room ? (
-        <div className="lobby-container">
-          <div className="lobby-card">
-            <h1>watch2gether</h1>
-            <p>Your personal space to watch videos with friends.</p>
-            
-            <div className="username-form">
-                <input 
-                    type="text" 
-                    placeholder="Enter your username" 
-                    value={username} 
-                    onChange={(e) => setUsername(e.target.value)} 
-                />
-            </div>
+      <main>
+        {!room ? (
+          <div className="lobby-container">
+            <div className="lobby-card">
+              <h1>watch2gether</h1>
+              <p>Your personal space to watch videos with friends.</p>
+              
+              <div className="username-form">
+                  <input 
+                      type="text" 
+                      placeholder="Enter your username" 
+                      value={username} 
+                      onChange={(e) => setUsername(e.target.value)} 
+                  />
+              </div>
 
-            <button onClick={handleCreateRoom} className="btn-primary" disabled={!username.trim()}>
-              Create New Room
-            </button>
-            <hr />
-            <div className="room-list">
-              <h3>Available Rooms</h3>
-              {availableRooms.length === 0 ? (
-                <p className="no-rooms-message">No rooms available. Why not create one?</p>
-              ) : (
-                <ul>
-                  {availableRooms.map((r) => (
-                    <li key={r.id} className="room-item">
-                        <div className="room-item-details">
-                            <span>Room {r.id} ({r.userCount} user{r.userCount > 1 ? 's' : ''})</span>
-                            <span className="room-host">Host: {r.hostUsername}</span>
-                        </div>
-                        <button onClick={() => handleJoinRoom(r.id)} className="btn-secondary" disabled={!username.trim()}>
-                            Join
-                        </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <button onClick={handleCreateRoom} className="btn-primary" disabled={!username.trim()}>
+                Create New Room
+              </button>
+              <hr />
+              <div className="room-list">
+                <h3>Available Rooms</h3>
+                {availableRooms.length === 0 ? (
+                  <p className="no-rooms-message">No rooms available. Why not create one?</p>
+                ) : (
+                  <ul>
+                    {availableRooms.map((r) => (
+                      <li key={r.id} className="room-item">
+                          <div className="room-item-details">
+                              <span>Room {r.id} ({r.userCount} user{r.userCount > 1 ? 's' : ''})</span>
+                              <span className="room-host">Host: {r.hostUsername}</span>
+                          </div>
+                          <button onClick={() => handleJoinRoom(r.id)} className="btn-secondary" disabled={!username.trim()}>
+                              Join
+                          </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <VideoPlayer room={room} setRoom={setRoom} onLeaveRoom={handleLeaveRoom} />
-      )}
+        ) : (
+          <VideoPlayer room={room} setRoom={setRoom} onLeaveRoom={handleLeaveRoom} />
+        )}
+      </main>
+      <Footer />
     </div>
   );
 }
