@@ -135,6 +135,15 @@ const registerSocketHandlers = (io, socket) => {
     }
   });
 
+  socket.on('sync-subtitle', ({ roomId, subtitle, subtitleType }) => {
+    const room = getRoom(roomId);
+    if (room) {
+      const newState = { subtitle, subtitleType };
+      const updatedRoom = updateRoomState(roomId, newState);
+      io.to(roomId).emit('state-update', updatedRoom);
+    }
+  });
+
   // --- Interval Management ---
   const startSyncingRoom = (roomId) => {
     if (syncIntervals.has(roomId)) return;

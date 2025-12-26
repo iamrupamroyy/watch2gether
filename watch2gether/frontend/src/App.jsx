@@ -141,12 +141,13 @@ function App() {
                 <ul>
                   {availableRooms.map((r) => (
                     <li key={r.id} className="room-item">
-                      <span>
-                        Room {r.id} ({r.userCount} user{r.userCount > 1 ? 's' : ''})
-                      </span>
-                      <button onClick={() => handleJoinRoom(r.id)} className="btn-secondary" disabled={!username.trim()}>
-                        Join
-                      </button>
+                        <div className="room-item-details">
+                            <span>Room {r.id} ({r.userCount} user{r.userCount > 1 ? 's' : ''})</span>
+                            <span className="room-host">Host: {r.hostUsername}</span>
+                        </div>
+                        <button onClick={() => handleJoinRoom(r.id)} className="btn-secondary" disabled={!username.trim()}>
+                            Join
+                        </button>
                     </li>
                   ))}
                 </ul>

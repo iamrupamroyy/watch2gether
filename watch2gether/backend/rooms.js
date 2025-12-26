@@ -14,6 +14,8 @@ const createRoom = (hostSocketId, username) => {
   const newRoom = {
     id: roomId,
     videoUrl: null,
+    subtitle: null,
+    subtitleType: null,
     isPlaying: false,
     videoTime: 0,
     lastUpdateTimestamp: Date.now(),
@@ -139,10 +141,12 @@ const generateRoomId = () => {
 const getPublicRooms = () => {
   const publicRooms = [];
   for (const [roomId, room] of rooms.entries()) {
+    const host = room.users.find(user => user.isHost);
     publicRooms.push({
       id: roomId,
       userCount: room.users.length,
       videoUrl: room.videoUrl,
+      hostUsername: host ? host.username : 'N/A',
     });
   }
   return publicRooms;
