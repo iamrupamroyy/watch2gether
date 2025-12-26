@@ -8,7 +8,7 @@ const DRIFT_THRESHOLD = 2; // in seconds
 const SEEK_AMOUNT = 10; // in seconds
 
 function formatTime(seconds) {
-  if (isNaN(seconds)) return '00:00';
+  if (isNaN(seconds) || seconds === 0) return '00:00';
   const date = new Date(seconds * 1000);
   const hh = date.getUTCHours();
   const mm = date.getUTCMinutes().toString().padStart(2, '0');
@@ -26,12 +26,14 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
     const subtitleUrlRef = useRef(null);
   
     const [showControls, setShowControls] = useState(false);
-    const [playbackProgress, setPlaybackProgress] = useState(0);
-    const [bufferProgress, setBufferProgress] = useState(0);
-    const [currentTime, setCurrentTime] = useState(0);
+    const [isBuffering, setBuffering] = useState(false);
     const [duration, setDuration] = useState(0);
     const [isLooping, setLooping] = useState(false);
     const isApplyingRemoteState = useRef(false);
+
+    // Derived state for simplicity in the UI
+    const currentTime = room.videoTime || 0;
+    const playbackProgress = (currentTime / duration) * 100;
 
     const isHost = room.users.find(user => user.id === socket.id)?.isHost || false;
 
@@ -39,15 +41,12 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
     useEffect(() => {
         const videoElement = videoRef.current;
         if (!videoElement) return;
-
-        // Clean up old subtitle blob URL on change or unmount
         const cleanup = () => {
             if (subtitleUrlRef.current) {
                 URL.revokeObjectURL(subtitleUrlRef.current);
                 subtitleUrlRef.current = null;
             }
         };
-
         cleanup();
 
         if (room.subtitle && room.subtitleType) {
@@ -63,11 +62,11 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
                 videoElement.appendChild(track);
                 subtitleTrackRef.current = track;
             }
-
             subtitleTrackRef.current.src = url;
-            videoElement.textTracks[0].mode = 'showing';
+            if(videoElement.textTracks[0]) {
+                videoElement.textTracks[0].mode = 'showing';
+            }
         }
-
         return cleanup;
     }, [room.subtitle, room.subtitleType]);
 
@@ -85,13 +84,11 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
 
         isApplyingRemoteState.current = true;
 
-        if (room.isPlaying && videoElement.readyState > 0) {
-            correctDrift(videoElement, room, DRIFT_THRESHOLD);
-        }
+        correctDrift(videoElement, room, DRIFT_THRESHOLD);
 
         if (room.isPlaying && videoElement.paused) {
             videoElement.play()
-                .catch(e => console.error("Autoplay was prevented or failed:", e))
+                .catch(e => console.error("Autoplay was prevented:", e))
                 .finally(() => { isApplyingRemoteState.current = false; });
         } else if (!room.isPlaying && !videoElement.paused) {
             videoElement.pause();
@@ -99,61 +96,60 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
         } else {
             isApplyingRemoteState.current = false;
         }
-    }, [room.isPlaying, room.videoTime, room.videoUrl]); // More specific dependencies
+    }, [room.isPlaying, room.videoTime, room.videoUrl]);
   
-    // Effect for handling local video events (progress, timeupdate)
+    // Effect for binding local video events
     useEffect(() => {
         const videoElement = videoRef.current;
         if (!videoElement) return;
         
+        const handleMetadata = () => setDuration(videoElement.duration);
         const handleTimeUpdate = () => {
-            if (videoElement.duration) {
-                setPlaybackProgress((videoElement.currentTime / videoElement.duration) * 100);
-                setCurrentTime(videoElement.currentTime);
+            const now = Date.now();
+            if (!room.isPlaying) return;
+            // Throttle time updates sent to server
+            if (isHost && (!room.lastUpdateTimestamp || (now - room.lastUpdateTimestamp > 1000))) {
+                socket.emit('sync-state', {
+                    roomId: room.id,
+                    newState: { ...room, videoTime: videoElement.currentTime, lastUpdateTimestamp: now }
+                });
             }
         };
+        const handleWaiting = () => setBuffering(true);
+        const handlePlaying = () => setBuffering(false);
 
-        const handleDurationChange = () => {
-            if (videoElement.duration) {
-                setDuration(videoElement.duration);
-            }
-        }
-        
-        const handleProgress = () => {
-            if (videoElement.duration && videoElement.buffered.length > 0) {
-                const bufferedEnd = videoElement.buffered.end(videoElement.buffered.length - 1);
-                setBufferProgress((bufferedEnd / videoElement.duration) * 100);
-            }
-        };
-
+        videoElement.addEventListener('loadedmetadata', handleMetadata);
         videoElement.addEventListener('timeupdate', handleTimeUpdate);
-        videoElement.addEventListener('progress', handleProgress);
-        videoElement.addEventListener('durationchange', handleDurationChange);
+        videoElement.addEventListener('waiting', handleWaiting);
+        videoElement.addEventListener('playing', handlePlaying);
+        videoElement.addEventListener('canplay', handlePlaying);
 
         return () => {
+            videoElement.removeEventListener('loadedmetadata', handleMetadata);
             videoElement.removeEventListener('timeupdate', handleTimeUpdate);
-            videoElement.removeEventListener('progress', handleProgress);
-            videoElement.removeEventListener('durationchange', handleDurationChange);
+            videoElement.removeEventListener('waiting', handleWaiting);
+            videoElement.removeEventListener('playing', handlePlaying);
+            videoElement.removeEventListener('canplay', handlePlaying);
         };
-    }, []);
+    }, [room.videoUrl, isHost, room.id]);
 
     const handlePlayRequest = () => {
-        if (isApplyingRemoteState.current || !videoRef.current) return;
+        if (!videoRef.current) return;
         socket.emit('play-request', { roomId: room.id, videoTime: videoRef.current.currentTime });
     };
 
     const handlePauseRequest = () => {
-        if (isApplyingRemoteState.current || !videoRef.current) return;
+        if (!videoRef.current) return;
         socket.emit('pause-request', { roomId: room.id, videoTime: videoRef.current.currentTime });
     };
 
     const handleSeek = (event) => {
-        if (isApplyingRemoteState.current || !videoRef.current) return;
+        if (!videoRef.current) return;
         const progressBar = event.currentTarget;
         const clickPosition = event.nativeEvent.offsetX;
         const progressBarWidth = progressBar.clientWidth;
         const seekRatio = clickPosition / progressBarWidth;
-        const seekTime = videoRef.current.duration * seekRatio;
+        const seekTime = duration * seekRatio;
         
         videoRef.current.currentTime = seekTime;
         socket.emit('sync-state', { roomId: room.id, newState: { ...room, videoTime: seekTime } });
@@ -182,7 +178,6 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
         if (newUrl.startsWith('http')) {
             const newState = { videoUrl: newUrl, isPlaying: false, videoTime: 0, subtitle: null, subtitleType: null };
             socket.emit('sync-state', { roomId: room.id, newState });
-            setRoom(prevRoom => ({...prevRoom, ...newState}));
         } else {
             alert("Please enter a valid video URL.");
         }
@@ -190,12 +185,12 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
 
     const handleForceSync = () => {
         if (!videoRef.current) return;
-        const currentState = {
+        const hostState = {
             ...room,
             isPlaying: !videoRef.current.paused,
             videoTime: videoRef.current.currentTime,
         };
-        socket.emit('sync-state', { roomId: room.id, newState: currentState });
+        socket.emit('sync-state', { roomId: room.id, newState: hostState });
     };
 
     return (
@@ -214,31 +209,28 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
                 <div className="video-section">
                     {room.videoUrl ? (
                     <div ref={playerContainerRef} className="video-player-container" onMouseEnter={() => setShowControls(true)} onMouseLeave={() => setShowControls(false)}>
-                        {/* crossOrigin is needed for subtitles to work on cross-origin videos,
-                            but it also requires the video server to have a permissive CORS policy.
-                            Removing it to prioritize video playback for a wider range of sources. */}
-                        <video ref={videoRef} src={room.videoUrl} width="100%" preload="metadata" onClick={!room.isPlaying ? handlePlayRequest : handlePauseRequest}>
-                            <track ref={subtitleTrackRef} kind="subtitles" srcLang="en" label="Subtitles" />
+                        {isBuffering && <div className="loading-spinner"></div>}
+                        <video ref={videoRef} src={room.videoUrl} width="100%" preload="metadata">
                             Your browser does not support the video tag.
                         </video>
                       
-                        <div className={`controls-overlay ${showControls || !room.isPlaying ? 'visible' : ''}`}>
+                        <div className={`controls-overlay ${showControls || !room.isPlaying ? 'visible' : ''}`} onClick={!room.isPlaying ? handlePlayRequest : handlePauseRequest}>
                             <div className="progress-bar-container" onClick={handleSeek}>
-                                <div className="buffer-bar" style={{width: `${bufferProgress}%`}}></div>
+                                <div className="buffer-bar" style={{width: `${(room.bufferProgress || 0)}%`}}></div>
                                 <div className="playback-bar" style={{width: `${playbackProgress}%`}}></div>
                             </div>
                             <div className="bottom-controls">
                                 <div className="controls-group left">
-                                    <button title="Seek Backward" className="control-button" onClick={() => handleSeekRelative(-SEEK_AMOUNT)}>-10s</button>
-                                    <button className="control-button" onClick={!room.isPlaying ? handlePlayRequest : handlePauseRequest}>
+                                    <button title="Seek Backward" className="control-button" onClick={(e) => { e.stopPropagation(); handleSeekRelative(-SEEK_AMOUNT); }}>-10s</button>
+                                    <button className="control-button" onClick={(e) => { e.stopPropagation(); !room.isPlaying ? handlePlayRequest() : handlePauseRequest(); }}>
                                         {room.isPlaying ? 'Pause' : 'Play'}
                                     </button>
-                                    <button title="Seek Forward" className="control-button" onClick={() => handleSeekRelative(SEEK_AMOUNT)}>+10s</button>
+                                    <button title="Seek Forward" className="control-button" onClick={(e) => { e.stopPropagation(); handleSeekRelative(SEEK_AMOUNT); }}>+10s</button>
                                     <span className="time-display">{formatTime(currentTime)} / {formatTime(duration)}</span>
                                 </div>
                                 <div className="controls-group right">
-                                    <button title="Toggle Loop" className={`control-button ${isLooping ? 'active' : ''}`} onClick={() => setLooping(!isLooping)}>Loop</button>
-                                    <button className="control-button" onClick={handleFullscreen}>Fullscreen</button>
+                                    <button title="Toggle Loop" className={`control-button ${isLooping ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setLooping(!isLooping);}}>Loop</button>
+                                    <button className="control-button" onClick={(e) => { e.stopPropagation(); handleFullscreen(); }}>Fullscreen</button>
                                 </div>
                             </div>
                         </div>
@@ -263,13 +255,11 @@ const HostControls = ({ onSetVideo, onForceSync, roomId }) => {
     const handleSubtitleUpload = (event) => {
         const file = event.target.files[0];
         if (!file) return;
-
         const extension = file.name.split('.').pop().toLowerCase();
         if (extension !== 'vtt') {
             alert('Please upload a .vtt subtitle file.');
             return;
         }
-
         const reader = new FileReader();
         reader.onload = (e) => {
             const content = e.target.result;
