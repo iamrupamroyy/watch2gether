@@ -163,21 +163,30 @@
 
 .room-main-content {
     display: flex;
-    flex-wrap: wrap;
     gap: 1.5rem;
-    justify-content: center;
+    align-items: flex-start;
 }
 
 .video-section {
-    flex: 3 1 700px; /* flex-grow, flex-shrink, flex-basis */
+    flex-grow: 1;
+    min-width: 0; /* Prevents the player from overflowing its container */
 }
 
 .user-list-section {
-    flex: 1 1 300px;
+    flex-shrink: 0;
+    width: 300px;
 }
 
 /* Responsive layout for smaller screens */
-@media (max-width: 600px) {
+@media (max-width: 900px) {
+    .room-main-content {
+        flex-direction: column;
+    }
+
+    .user-list-section {
+        width: 100%;
+    }
+}
     .room-header {
         flex-direction: column;
         gap: 1rem;
