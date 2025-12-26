@@ -71,10 +71,10 @@ const registerSocketHandlers = (io, socket) => {
     socket.leave(roomId);
     const result = removeUserFromRoom(socket.id);
     if (result) {
-      const { updatedRoom, wasHost } = result;
+      const { updatedRoom, newHostId } = result;
       if (updatedRoom) {
         // Notify remaining users that someone has left
-        io.to(roomId).emit('user-left', { userId: socket.id, newHostId: wasHost && updatedRoom.users.length > 0 ? updatedRoom.users[0].id : null });
+        io.to(roomId).emit('user-left', { userId: socket.id, newHostId: newHostId });
       } else {
         // If the room was deleted, stop its sync interval
         stopSyncingRoom(roomId);
@@ -89,11 +89,11 @@ const registerSocketHandlers = (io, socket) => {
   socket.on('disconnect', () => {
     const result = removeUserFromRoom(socket.id);
     if (result) {
-      const { roomId, updatedRoom, wasHost } = result;
+      const { roomId, updatedRoom, newHostId } = result;
       
       if (updatedRoom) {
         // Notify remaining users that someone has left
-        io.to(roomId).emit('user-left', { userId: socket.id, newHostId: wasHost ? updatedRoom.users[0].id : null });
+        io.to(roomId).emit('user-left', { userId: socket.id, newHostId: newHostId });
       } else {
         // If the room was deleted, stop its sync interval
         stopSyncingRoom(roomId);

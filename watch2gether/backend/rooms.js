@@ -43,10 +43,14 @@ const addUserToRoom = (roomId, userSocketId, username) => {
   const room = getRoom(roomId);
   if (room) {
     // Check if user is already in the room to prevent duplicates
-    if (!room.users.some(user => user.id === userSocketId)) {
-      room.users.push({ id: userSocketId, username: username, isHost: false });
+    if (room.users.some(user => user.id === userSocketId)) {
+        return room; // User already in room, just return the room
     }
-    return room;
+    const newUser = { id: userSocketId, username: username, isHost: false };
+    const updatedUsers = [...room.users, newUser];
+    const updatedRoom = { ...room, users: updatedUsers };
+    rooms.set(roomId, updatedRoom);
+    return updatedRoom;
   }
   return null;
 };
@@ -62,22 +66,29 @@ const removeUserFromRoom = (userSocketId) => {
     const userIndex = room.users.findIndex(user => user.id === userSocketId);
     if (userIndex !== -1) {
       const wasHost = room.users[userIndex].isHost;
-      room.users.splice(userIndex, 1);
+      
+      const updatedUsers = room.users.filter(user => user.id !== userSocketId);
 
       // If the room is now empty, delete it.
-      if (room.users.length === 0) {
+      if (updatedUsers.length === 0) {
         rooms.delete(roomId);
         console.log(`Room deleted: ${roomId}`);
-        return { roomId, updatedRoom: null, wasHost }; // No updated room to return
+        return { roomId, updatedRoom: null, wasHost };
       }
 
+      let finalUsers = updatedUsers;
+      let newHostId = null;
       // If the host disconnected, assign a new host.
       if (wasHost) {
-        room.users[0].isHost = true;
-        console.log(`New host for room ${roomId}: ${room.users[0].id}`);
+        const newHost = { ...updatedUsers[0], isHost: true };
+        finalUsers = [newHost, ...updatedUsers.slice(1)];
+        newHostId = finalUsers[0].id;
+        console.log(`New host for room ${roomId}: ${newHostId}`);
       }
       
-      return { roomId, updatedRoom: room, wasHost };
+      const updatedRoom = { ...room, users: finalUsers };
+      rooms.set(roomId, updatedRoom);
+      return { roomId, updatedRoom: updatedRoom, wasHost, newHostId: newHostId };
     }
   }
   return null;
