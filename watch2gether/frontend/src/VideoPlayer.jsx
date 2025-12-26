@@ -120,9 +120,11 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
         const handleTimeUpdate = () => {
             const now = Date.now();
             if (!videoElement.paused && isHost && (!room.lastUpdateTimestamp || (now - room.lastUpdateTimestamp > 2000))) {
+                // ONLY sync time and timestamp. Do not spread the old room state.
+                const timeSyncState = { videoTime: videoElement.currentTime, lastUpdateTimestamp: now };
                 socket.emit('sync-state', {
                     roomId: room.id,
-                    newState: { ...room, videoTime: videoElement.currentTime, lastUpdateTimestamp: now }
+                    newState: timeSyncState
                 });
             }
         };
