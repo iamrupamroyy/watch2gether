@@ -188,6 +188,16 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
         }
     };
 
+    const handleForceSync = () => {
+        if (!videoRef.current) return;
+        const currentState = {
+            ...room,
+            isPlaying: !videoRef.current.paused,
+            videoTime: videoRef.current.currentTime,
+        };
+        socket.emit('sync-state', { roomId: room.id, newState: currentState });
+    };
+
     return (
         <div className="room-container">
             <header className="room-header">
@@ -198,7 +208,7 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
                 <button onClick={onLeaveRoom} className="btn-secondary">Leave Room</button>
             </header>
           
-            {isHost && <HostControls onSetVideo={handleSetVideo} roomId={room.id} />}
+            {isHost && <HostControls onSetVideo={handleSetVideo} onForceSync={handleForceSync} roomId={room.id} />}
 
             <div className="room-main-content">
                 <div className="video-section">
@@ -247,7 +257,7 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
     );
 }
 
-const HostControls = ({ onSetVideo, roomId }) => {
+const HostControls = ({ onSetVideo, onForceSync, roomId }) => {
     const [videoUrlInput, setVideoUrlInput] = useState('');
 
     const handleSubtitleUpload = (event) => {
@@ -286,6 +296,12 @@ const HostControls = ({ onSetVideo, roomId }) => {
                 <div className="input-group">
                     <label htmlFor="subtitle-upload" className="btn-secondary">Upload .vtt file</label>
                     <input id="subtitle-upload" type="file" accept=".vtt" onChange={handleSubtitleUpload} />
+                </div>
+            </div>
+            <div className="control-section">
+                <h4>Sync</h4>
+                <div className="input-group">
+                    <button onClick={onForceSync} className="btn-secondary">Force Sync for All</button>
                 </div>
             </div>
         </div>
