@@ -51,15 +51,22 @@ const registerSocketHandlers = (io, socket) => {
    * @param {string} roomId The ID of the room to join.
    */
   socket.on('join-room', ({ roomId, username }) => {
-    const room = addUserToRoom(roomId, socket.id, username);
+    const { room, error, wasAdded } = addUserToRoom(roomId, socket.id, username);
+    if (error) {
+      socket.emit('join-error', { message: error });
+      return;
+    }
+
     if (room) {
       socket.join(roomId);
       socket.emit('join-success', room);
-      const newUser = room.users.find(u => u.id === socket.id);
-      socket.to(roomId).emit('user-joined', { user: newUser });
+
+      if (wasAdded) {
+        const newUser = room.users.find(u => u.id === socket.id);
+        socket.to(roomId).emit('user-joined', { user: newUser });
+      }
+      
       broadcastRoomList(io); // Update user count in lobby
-    } else {
-      socket.emit('error-joining', 'Room not found.');
     }
   });
 

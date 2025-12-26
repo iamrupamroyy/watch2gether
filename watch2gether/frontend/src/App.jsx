@@ -65,12 +65,17 @@ function App() {
       });
     }
 
+    function onJoinError({ message }) {
+      alert(`Failed to join room: ${message}`);
+    }
+
     socket.on('room-created', onRoomCreated);
     socket.on('join-success', onJoinSuccess);
     socket.on('room-list-update', onRoomListUpdate);
     socket.on('state-update', onStateUpdate);
     socket.on('user-joined', onUserJoined);
     socket.on('user-left', onUserLeft);
+    socket.on('join-error', onJoinError);
 
     return () => {
       socket.off('room-created', onRoomCreated);
@@ -79,6 +84,7 @@ function App() {
       socket.off('state-update', onStateUpdate);
       socket.off('user-joined', onUserJoined);
       socket.off('user-left', onUserLeft);
+      socket.off('join-error', onJoinError);
     };
   }, []);
 

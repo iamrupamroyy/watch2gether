@@ -41,18 +41,27 @@ const getRoom = (roomId) => {
  */
 const addUserToRoom = (roomId, userSocketId, username) => {
   const room = getRoom(roomId);
-  if (room) {
-    // Check if user is already in the room to prevent duplicates
-    if (room.users.some(user => user.id === userSocketId)) {
-        return room; // User already in room, just return the room
-    }
-    const newUser = { id: userSocketId, username: username, isHost: false };
-    const updatedUsers = [...room.users, newUser];
-    const updatedRoom = { ...room, users: updatedUsers };
-    rooms.set(roomId, updatedRoom);
-    return updatedRoom;
+  if (!room) {
+    return { room: null, error: 'Room not found.', wasAdded: false };
   }
-  return null;
+
+  // Check if user is already in the room
+  if (room.users.some(user => user.id === userSocketId)) {
+      return { room: room, error: null, wasAdded: false }; // Already in room, success
+  }
+  
+  // Check for unique username (case-insensitive)
+  const isUsernameTaken = room.users.some(user => user.username.toLowerCase() === username.toLowerCase());
+  if (isUsernameTaken) {
+    return { room: null, error: 'Username is already taken in this room.', wasAdded: false };
+  }
+
+  const newUser = { id: userSocketId, username: username, isHost: false };
+  const updatedUsers = [...room.users, newUser];
+  const updatedRoom = { ...room, users: updatedUsers };
+  rooms.set(roomId, updatedRoom);
+  
+  return { room: updatedRoom, error: null, wasAdded: true };
 };
 
 /**

@@ -197,3 +197,29 @@ button:disabled {
     background-color: var(--accent-primary);
     opacity: 0.5;
 }
+
+/* Responsive Styles */
+@media (max-width: 600px) {
+    #root {
+        padding: 1rem;
+    }
+
+    .lobby-card {
+        padding: 1.5rem;
+    }
+
+    .lobby-card h1 {
+        font-size: 2em;
+    }
+
+    .room-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .room-item .btn-secondary {
+        width: 100%;
+        text-align: center;
+    }
+}
