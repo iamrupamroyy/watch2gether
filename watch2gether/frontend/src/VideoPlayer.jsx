@@ -284,21 +284,14 @@ const HostControls = ({ onSetVideo, onForceSync, roomId }) => {
 
     return (
         <div className="host-controls">
-            <div className="control-section">
-                <h4>Set Video URL</h4>
-                <div className="input-group">
-                    <input type="text" value={videoUrlInput} onChange={(e) => setVideoUrlInput(e.target.value)} placeholder="Enter direct video URL"/>
-                    <button onClick={() => onSetVideo(videoUrlInput)} className="btn-primary">Set</button>
-                </div>
+            <div className="input-group">
+                <input type="text" value={videoUrlInput} onChange={(e) => setVideoUrlInput(e.target.value)} placeholder="Enter direct video URL"/>
+                <button onClick={() => onSetVideo(videoUrlInput)} className="btn-primary">Set Video</button>
             </div>
-            <div className="control-section">
-                <h4>Upload Subtitles</h4>
-                <label htmlFor="subtitle-upload" className="btn-secondary">Upload .vtt file</label>
+            <div className="input-group">
+                <label htmlFor="subtitle-upload" className="btn-secondary">Upload .vtt Subtitles</label>
                 <input id="subtitle-upload" type="file" accept=".vtt" onChange={handleSubtitleUpload} />
-            </div>
-            <div className="control-section">
-                <h4>Manual Sync</h4>
-                <button onClick={onForceSync} className="btn-secondary">Force Sync for All</button>
+                <button onClick={onForceSync} className="btn-secondary">Force Sync</button>
             </div>
         </div>
     );
