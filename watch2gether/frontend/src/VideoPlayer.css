@@ -29,17 +29,23 @@
 }
 
 .host-controls {
-    display: flex;
-    gap: 2rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
     margin-bottom: 1.5rem;
     background-color: var(--background-secondary);
     padding: 1.5rem;
     border-radius: 12px;
-    align-items: flex-start;
 }
 
 .control-section {
-    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.control-section .btn-secondary {
+    width: 100%;
 }
 
 .control-section h4 {
