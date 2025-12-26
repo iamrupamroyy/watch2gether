@@ -2,6 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { socket } from './socket';
 import { correctDrift } from './utils/sync';
 import UserList from './UserList';
+import { 
+    PlayIcon, PauseIcon, FullscreenIcon, ExitFullscreenIcon, 
+    LoopIcon, Replay10Icon, Forward10Icon 
+} from './PlayerIcons';
 import './VideoPlayer.css';
 
 const DRIFT_THRESHOLD = 2; // in seconds
@@ -29,11 +33,11 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
     const [isBuffering, setBuffering] = useState(false);
     const [duration, setDuration] = useState(0);
     const [isLooping, setLooping] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(false);
     const isApplyingRemoteState = useRef(false);
 
-    // Derived state for simplicity in the UI
     const currentTime = room.videoTime || 0;
-    const playbackProgress = (currentTime / duration) * 100;
+    const playbackProgress = (duration > 0) ? (currentTime / duration) * 100 : 0;
 
     const isHost = room.users.find(user => user.id === socket.id)?.isHost || false;
 
@@ -41,6 +45,7 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
     useEffect(() => {
         const videoElement = videoRef.current;
         if (!videoElement) return;
+
         const cleanup = () => {
             if (subtitleUrlRef.current) {
                 URL.revokeObjectURL(subtitleUrlRef.current);
@@ -54,16 +59,18 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
             const url = URL.createObjectURL(blob);
             subtitleUrlRef.current = url;
 
-            if (!subtitleTrackRef.current) {
-                const track = document.createElement('track');
+            let track = subtitleTrackRef.current;
+            if (!track) {
+                track = document.createElement('track');
                 track.kind = 'subtitles';
                 track.label = 'Subtitles';
                 track.srclang = 'en';
                 videoElement.appendChild(track);
                 subtitleTrackRef.current = track;
             }
-            subtitleTrackRef.current.src = url;
-            if(videoElement.textTracks[0]) {
+
+            track.src = url;
+            if (videoElement.textTracks && videoElement.textTracks[0]) {
                 videoElement.textTracks[0].mode = 'showing';
             }
         }
@@ -77,13 +84,19 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
         }
     }, [isLooping]);
 
+    // Fullscreen change handler
+    useEffect(() => {
+        const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
+
     // Effect for handling server state updates
     useEffect(() => {
         const videoElement = videoRef.current;
         if (!videoElement) return;
 
         isApplyingRemoteState.current = true;
-
         correctDrift(videoElement, room, DRIFT_THRESHOLD);
 
         if (room.isPlaying && videoElement.paused) {
@@ -106,9 +119,7 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
         const handleMetadata = () => setDuration(videoElement.duration);
         const handleTimeUpdate = () => {
             const now = Date.now();
-            if (!room.isPlaying) return;
-            // Throttle time updates sent to server
-            if (isHost && (!room.lastUpdateTimestamp || (now - room.lastUpdateTimestamp > 1000))) {
+            if (!videoElement.paused && isHost && (!room.lastUpdateTimestamp || (now - room.lastUpdateTimestamp > 2000))) {
                 socket.emit('sync-state', {
                     roomId: room.id,
                     newState: { ...room, videoTime: videoElement.currentTime, lastUpdateTimestamp: now }
@@ -144,7 +155,7 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
     };
 
     const handleSeek = (event) => {
-        if (!videoRef.current) return;
+        if (!videoRef.current || !duration) return;
         const progressBar = event.currentTarget;
         const clickPosition = event.nativeEvent.offsetX;
         const progressBarWidth = progressBar.clientWidth;
@@ -156,7 +167,7 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
     };
 
     const handleSeekRelative = (amount) => {
-        if (!videoRef.current) return;
+        if (!videoRef.current || !duration) return;
         const newTime = Math.max(0, videoRef.current.currentTime + amount);
         videoRef.current.currentTime = newTime;
         socket.emit('sync-state', { roomId: room.id, newState: { ...room, videoTime: newTime } });
@@ -210,27 +221,26 @@ function VideoPlayer({ room, setRoom, onLeaveRoom }) {
                     {room.videoUrl ? (
                     <div ref={playerContainerRef} className="video-player-container" onMouseEnter={() => setShowControls(true)} onMouseLeave={() => setShowControls(false)}>
                         {isBuffering && <div className="loading-spinner"></div>}
-                        <video ref={videoRef} src={room.videoUrl} width="100%" preload="metadata">
-                            Your browser does not support the video tag.
-                        </video>
+                        <video ref={videoRef} src={room.videoUrl} width="100%" preload="metadata" />
                       
                         <div className={`controls-overlay ${showControls || !room.isPlaying ? 'visible' : ''}`} onClick={!room.isPlaying ? handlePlayRequest : handlePauseRequest}>
-                            <div className="progress-bar-container" onClick={handleSeek}>
-                                <div className="buffer-bar" style={{width: `${(room.bufferProgress || 0)}%`}}></div>
+                            <div className="progress-bar-container" onClick={(e) => { e.stopPropagation(); handleSeek(e); }}>
                                 <div className="playback-bar" style={{width: `${playbackProgress}%`}}></div>
                             </div>
                             <div className="bottom-controls">
                                 <div className="controls-group left">
-                                    <button title="Seek Backward" className="control-button" onClick={(e) => { e.stopPropagation(); handleSeekRelative(-SEEK_AMOUNT); }}>-10s</button>
-                                    <button className="control-button" onClick={(e) => { e.stopPropagation(); !room.isPlaying ? handlePlayRequest() : handlePauseRequest(); }}>
-                                        {room.isPlaying ? 'Pause' : 'Play'}
+                                    <button title="Seek Backward 10s" className="control-button" onClick={(e) => { e.stopPropagation(); handleSeekRelative(-SEEK_AMOUNT); }}><Replay10Icon /></button>
+                                    <button title={room.isPlaying ? 'Pause' : 'Play'} className="control-button" onClick={(e) => { e.stopPropagation(); !room.isPlaying ? handlePlayRequest() : handlePauseRequest(); }}>
+                                        {room.isPlaying ? <PauseIcon /> : <PlayIcon />}
                                     </button>
-                                    <button title="Seek Forward" className="control-button" onClick={(e) => { e.stopPropagation(); handleSeekRelative(SEEK_AMOUNT); }}>+10s</button>
+                                    <button title="Seek Forward 10s" className="control-button" onClick={(e) => { e.stopPropagation(); handleSeekRelative(SEEK_AMOUNT); }}><Forward10Icon /></button>
                                     <span className="time-display">{formatTime(currentTime)} / {formatTime(duration)}</span>
                                 </div>
                                 <div className="controls-group right">
-                                    <button title="Toggle Loop" className={`control-button ${isLooping ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setLooping(!isLooping);}}>Loop</button>
-                                    <button className="control-button" onClick={(e) => { e.stopPropagation(); handleFullscreen(); }}>Fullscreen</button>
+                                    <button title="Toggle Loop" className={`control-button ${isLooping ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setLooping(!isLooping);}}><LoopIcon /></button>
+                                    <button title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'} className="control-button" onClick={(e) => { e.stopPropagation(); handleFullscreen(); }}>
+                                        {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+                                    </button>
                                 </div>
                             </div>
                         </div>

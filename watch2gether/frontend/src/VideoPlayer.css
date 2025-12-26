@@ -156,8 +156,22 @@
     background: none;
     border: none;
     color: white;
-    font-size: 1em;
     cursor: pointer;
+    padding: 6px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.control-button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.control-button svg {
+    width: 28px;
+    height: 28px;
 }
 
 .control-button.active {
@@ -171,20 +185,18 @@
 
 .room-main-content {
     display: flex;
-    flex-wrap: wrap;
     gap: 1.5rem;
-    justify-content: center;
+    align-items: flex-start;
 }
 
 .video-section {
-    width: 960px;
-    max-width: 100%;
+    flex-grow: 1;
+    min-width: 0; /* Crucial for proper shrinking in flexbox */
 }
 
 .user-list-section {
-    width: 300px;
-    max-width: 100%;
-    flex-grow: 1; /* Allow it to grow on small screens when it wraps */
+    flex-basis: 300px;
+    flex-shrink: 0;
 }
 
 .loading-spinner {
@@ -208,6 +220,16 @@
 }
 
 /* Responsive layout for smaller screens */
+@media (max-width: 960px) {
+    .room-main-content {
+        flex-direction: column;
+    }
+    .user-list-section {
+        width: 100%;
+        flex-basis: auto;
+    }
+}
+
 @media (max-width: 600px) {
     .room-header {
         flex-direction: column;
