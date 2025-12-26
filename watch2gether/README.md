@@ -1,4 +1,4 @@
-# Watch Party
+# Watch2Gether
 
 A web-based synchronized video watch party platform built with Node.js, Express, Socket.IO, and React.
 
@@ -13,7 +13,7 @@ A web-based synchronized video watch party platform built with Node.js, Express,
 ## Project Structure
 
 ```
-watch-party/
+watch2gether/
 ├── backend/
 │   ├── package.json
 │   ├── index.js
@@ -43,7 +43,7 @@ watch-party/
 First, navigate to the backend directory and install the dependencies.
 
 ```bash
-cd watch-party/backend
+cd watch2gether/backend
 npm install
 ```
 
@@ -60,7 +60,7 @@ The server will be running on `http://localhost:3001`.
 Open a **new terminal window**, navigate to the frontend directory, and install the dependencies.
 
 ```bash
-cd watch-party/frontend
+cd watch2gether/frontend
 npm install
 ```
 
@@ -79,6 +79,48 @@ The frontend will be accessible at `http://localhost:5173` (or another port if 5
 3.  **Join a Room:** Open a new browser window or tab and navigate to `http://localhost:5173`. Enter the room code from the first window and click "Join Room".
 4.  **Set Video:** As the host, paste a direct video URL (e.g., from [archive.org](https://archive.org/details/movies?tab=collection&sort=-publicdate)) into the input field and click "Set Video".
 5.  **Watch Together:** The video will load for all users in the room. Play, pause, and seeking are synchronized across all clients.
+
+## Deployment
+
+This project can be deployed for free using services like Vercel (for the frontend) and Render (for the backend).
+
+### Backend Deployment (Render)
+
+1.  **Push to GitHub:** Make sure your project is on a GitHub repository.
+2.  **Create a Render Account:** Sign up for a free account at [render.com](https://render.com/).
+3.  **New Web Service:**
+    *   On your Render dashboard, click "New" -> "Web Service".
+    *   Connect your GitHub account and select your repository.
+4.  **Configuration:**
+    *   **Name:** Give your service a name (e.g., `watch2gether-backend`).
+    *   **Root Directory:** `backend`
+    *   **Environment:** `Node`
+    *   **Build Command:** `npm install`
+    *   **Start Command:** `npm start`
+5.  **Create Web Service:** Click "Create Web Service". Render will automatically build and deploy your backend.
+6.  **Get the URL:** Once deployed, Render will provide you with a public URL for your backend (e.g., `https://watch2gether-backend.onrender.com`). You will need this for the frontend configuration.
+
+### Frontend Deployment (Vercel)
+
+1.  **Update API Endpoint:**
+    *   Before deploying the frontend, you need to tell it where to find the backend.
+    *   In `frontend/src/socket.js`, change the following line:
+        ```javascript
+        // const socket = io("http://localhost:3001");
+        const socket = io("YOUR_RENDER_BACKEND_URL"); // Replace with your actual backend URL
+        ```
+2.  **Push to GitHub:** Commit and push the updated `socket.js` file to your GitHub repository.
+3.  **Create a Vercel Account:** Sign up for a free account at [vercel.com](https://vercel.com/).
+4.  **New Project:**
+    *   On your Vercel dashboard, click "Add New..." -> "Project".
+    *   Import your GitHub repository.
+5.  **Configuration:**
+    *   **Framework Preset:** Vercel should automatically detect `Vite`.
+    *   **Root Directory:** `frontend`
+6.  **Deploy:** Click "Deploy". Vercel will build and deploy your React application.
+7.  **Access Your Site:** Vercel will provide you with a public URL for your live site.
+
+Now your Watch2Gether application is live and accessible to anyone!
 
 ## Future Improvements
 
