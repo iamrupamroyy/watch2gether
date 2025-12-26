@@ -2,15 +2,19 @@
 import React, { useState, useEffect } from 'react';
 import { socket } from './socket';
 import VideoPlayer from './VideoPlayer';
+import ThemeToggler from './ThemeToggler';
 
 function App() {
   const [room, setRoom] = useState(null);
   const [availableRooms, setAvailableRooms] = useState([]);
+  const [username, setUsername] = useState(localStorage.getItem('username') || '');
 
   useEffect(() => {
-    // These listeners are set up once and use functional updates
-    // to avoid issues with stale state in closures.
+    // Persist username
+    localStorage.setItem('username', username);
+  }, [username]);
 
+  useEffect(() => {
     function onRoomCreated(newRoom) {
       setRoom(newRoom);
     }
@@ -32,14 +36,18 @@ function App() {
       });
     }
     
-    function onUserJoined(data) {
-      setRoom(prevRoom => {
-        if (prevRoom) {
-          return {...prevRoom, users: [...prevRoom.users, {id: data.userId, isHost: false}]};
-        }
-        return prevRoom;
-      });
-    }
+    function onUserJoined({ user }) {
+        setRoom(prevRoom => {
+          if (prevRoom && user) {
+            // Avoid adding duplicate users
+            if (prevRoom.users.some(u => u.id === user.id)) {
+              return prevRoom;
+            }
+            return {...prevRoom, users: [...prevRoom.users, user]};
+          }
+          return prevRoom;
+        });
+      }
 
     function onUserLeft(data) {
       setRoom(prevRoom => {
@@ -72,45 +80,79 @@ function App() {
       socket.off('user-joined', onUserJoined);
       socket.off('user-left', onUserLeft);
     };
-  }, []); // Empty dependency array ensures this effect runs only once.
+  }, []);
 
   const handleCreateRoom = () => {
-    socket.emit('create-room');
+    if (username.trim()) {
+      socket.emit('create-room', { username });
+    } else {
+      alert('Please enter a username.');
+    }
   };
 
   const handleJoinRoom = (roomId) => {
-    socket.emit('join-room', roomId);
+    if (username.trim()) {
+      socket.emit('join-room', { roomId, username });
+    } else {
+      alert('Please enter a username.');
+    }
   };
 
-  // Lobby View
-  if (!room) {
-    return (
-      <div>
-        <h1>watch2gether</h1>
-        <h2>Lobby</h2>
-        <button onClick={handleCreateRoom}>Create New Room</button>
-        <hr />
-        <h3>Available Rooms</h3>
-        {availableRooms.length === 0 ? (
-          <p>No rooms available. Why not create one?</p>
-        ) : (
-          <ul>
-            {availableRooms.map((r) => (
-              <li key={r.id}>
-                Room {r.id} ({r.userCount} user{r.userCount > 1 ? 's' : ''})
-                <button onClick={() => handleJoinRoom(r.id)} style={{marginLeft: "10px"}}>
-                  Join
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
-  }
+  const handleLeaveRoom = () => {
+    if (room) {
+      socket.emit('leave-room', room.id);
+      setRoom(null);
+    }
+  };
 
-  // Room View
-  return <VideoPlayer room={room} setRoom={setRoom} />;
+  return (
+    <div className="app-container">
+      <ThemeToggler />
+      {!room ? (
+        <div className="lobby-container">
+          <div className="lobby-card">
+            <h1>watch2gether</h1>
+            <p>Your personal space to watch videos with friends.</p>
+            
+            <div className="username-form">
+                <input 
+                    type="text" 
+                    placeholder="Enter your username" 
+                    value={username} 
+                    onChange={(e) => setUsername(e.target.value)} 
+                />
+            </div>
+
+            <button onClick={handleCreateRoom} className="btn-primary" disabled={!username.trim()}>
+              Create New Room
+            </button>
+            <hr />
+            <div className="room-list">
+              <h3>Available Rooms</h3>
+              {availableRooms.length === 0 ? (
+                <p className="no-rooms-message">No rooms available. Why not create one?</p>
+              ) : (
+                <ul>
+                  {availableRooms.map((r) => (
+                    <li key={r.id} className="room-item">
+                      <span>
+                        Room {r.id} ({r.userCount} user{r.userCount > 1 ? 's' : ''})
+                      </span>
+                      <button onClick={() => handleJoinRoom(r.id)} className="btn-secondary" disabled={!username.trim()}>
+                        Join
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <VideoPlayer room={room} setRoom={setRoom} onLeaveRoom={handleLeaveRoom} />
+      )}
+    </div>
+  );
 }
 
 export default App;

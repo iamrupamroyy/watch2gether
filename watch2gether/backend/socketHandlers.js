@@ -38,8 +38,8 @@ const registerSocketHandlers = (io, socket) => {
   /**
    * Handles room creation. The user who creates the room is the initial host.
    */
-  socket.on('create-room', () => {
-    const newRoom = createRoom(socket.id);
+  socket.on('create-room', ({ username }) => {
+    const newRoom = createRoom(socket.id, username);
     socket.join(newRoom.id);
     socket.emit('room-created', newRoom);
     startSyncingRoom(newRoom.id);
@@ -50,15 +50,36 @@ const registerSocketHandlers = (io, socket) => {
    * Handles a user joining an existing room.
    * @param {string} roomId The ID of the room to join.
    */
-  socket.on('join-room', (roomId) => {
-    const room = addUserToRoom(roomId, socket.id);
+  socket.on('join-room', ({ roomId, username }) => {
+    const room = addUserToRoom(roomId, socket.id, username);
     if (room) {
       socket.join(roomId);
       socket.emit('join-success', room);
-      socket.to(roomId).emit('user-joined', { userId: socket.id });
+      const newUser = room.users.find(u => u.id === socket.id);
+      socket.to(roomId).emit('user-joined', { user: newUser });
       broadcastRoomList(io); // Update user count in lobby
     } else {
       socket.emit('error-joining', 'Room not found.');
+    }
+  });
+
+  /**
+   * Handles a user leaving a room.
+   * @param {string} roomId The ID of the room to leave.
+   */
+  socket.on('leave-room', (roomId) => {
+    socket.leave(roomId);
+    const result = removeUserFromRoom(socket.id);
+    if (result) {
+      const { updatedRoom, wasHost } = result;
+      if (updatedRoom) {
+        // Notify remaining users that someone has left
+        io.to(roomId).emit('user-left', { userId: socket.id, newHostId: wasHost && updatedRoom.users.length > 0 ? updatedRoom.users[0].id : null });
+      } else {
+        // If the room was deleted, stop its sync interval
+        stopSyncingRoom(roomId);
+      }
+      broadcastRoomList(io); // Update lobby for all clients
     }
   });
 

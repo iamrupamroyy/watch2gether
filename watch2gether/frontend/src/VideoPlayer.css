@@ -1,0 +1,150 @@
+/* frontend/src/VideoPlayer.css */
+
+.room-container {
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.room-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    background-color: var(--background-secondary);
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+}
+
+.room-info h2 {
+    margin: 0;
+    font-size: 1.5em;
+    color: var(--accent-secondary);
+}
+
+.room-info .user-count {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+.host-controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    background-color: var(--background-secondary);
+    padding: 1.5rem;
+    border-radius: 12px;
+}
+
+.host-controls input {
+    flex-grow: 1;
+    font-size: 1.1em;
+}
+
+.no-video-placeholder {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 480px;
+    background-color: var(--background-primary);
+    border-radius: 12px;
+    color: var(--text-secondary);
+    border: 2px dashed var(--border-color);
+}
+
+.video-player-container {
+    position: relative;
+    background-color: black;
+    width: 100%;
+    margin: 0 auto;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.controls-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+}
+
+.controls-overlay.visible {
+    opacity: 1;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 8px;
+    background-color: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    position: relative;
+}
+
+.buffer-bar {
+    position: absolute;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.5);
+    transition: width 0.1s linear;
+}
+
+.playback-bar {
+    position: absolute;
+    height: 100%;
+    background-color: var(--accent-primary);
+    transition: width 0.1s linear;
+}
+
+.bottom-controls {
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.controls-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.control-button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1em;
+    cursor: pointer;
+}
+
+.time-display {
+    color: white;
+    font-size: 0.9em;
+}
+
+.room-main-content {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.video-section {
+    flex-grow: 1;
+}
+
+.user-list-section {
+    flex-shrink: 0;
+    width: 300px;
+}
+
+/* Responsive layout for smaller screens */
+@media (max-width: 900px) {
+    .room-main-content {
+        flex-direction: column;
+    }
+
+    .user-list-section {
+        width: 100%;
+    }
+}

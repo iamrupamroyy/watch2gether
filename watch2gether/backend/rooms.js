@@ -9,7 +9,7 @@ const rooms = new Map();
  * @param {string} hostSocketId The socket ID of the host creating the room.
  * @returns {object} The newly created room object.
  */
-const createRoom = (hostSocketId) => {
+const createRoom = (hostSocketId, username) => {
   const roomId = generateRoomId();
   const newRoom = {
     id: roomId,
@@ -17,7 +17,7 @@ const createRoom = (hostSocketId) => {
     isPlaying: false,
     videoTime: 0,
     lastUpdateTimestamp: Date.now(),
-    users: [{ id: hostSocketId, isHost: true }],
+    users: [{ id: hostSocketId, username: username, isHost: true }],
   };
   rooms.set(roomId, newRoom);
   console.log(`Room created: ${roomId}`);
@@ -39,12 +39,12 @@ const getRoom = (roomId) => {
  * @param {string} userSocketId The socket ID of the user joining.
  * @returns {object | null} The updated room object or null if the room doesn't exist.
  */
-const addUserToRoom = (roomId, userSocketId) => {
+const addUserToRoom = (roomId, userSocketId, username) => {
   const room = getRoom(roomId);
   if (room) {
     // Check if user is already in the room to prevent duplicates
     if (!room.users.some(user => user.id === userSocketId)) {
-      room.users.push({ id: userSocketId, isHost: false });
+      room.users.push({ id: userSocketId, username: username, isHost: false });
     }
     return room;
   }

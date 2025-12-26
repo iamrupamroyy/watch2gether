@@ -1,23 +1,32 @@
-// frontend/src/VideoPlayer.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { socket } from './socket';
 import { correctDrift } from './utils/sync';
+import UserList from './UserList'; // Import UserList
+import './VideoPlayer.css'; // Import the CSS file
 
 const DRIFT_THRESHOLD = 2; // in seconds
-const PLAYER_SIZES = {
-  small: '640px',
-  medium: '800px',
-  large: '1024px',
-};
 
-function VideoPlayer({ room, setRoom }) {
+function formatTime(seconds) {
+  if (isNaN(seconds)) return '00:00';
+  const date = new Date(seconds * 1000);
+  const hh = date.getUTCHours();
+  const mm = date.getUTCMinutes().toString().padStart(2, '0');
+  const ss = date.getUTCSeconds().toString().padStart(2, '0');
+  if (hh) {
+    return `${hh}:${mm}:${ss}`;
+  }
+  return `${mm}:${ss}`;
+}
+
+function VideoPlayer({ room, setRoom, onLeaveRoom }) {
   const videoRef = useRef(null);
   const playerContainerRef = useRef(null);
   
-  const [playerSize, setPlayerSize] = useState('medium');
   const [showControls, setShowControls] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [bufferProgress, setBufferProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const isApplyingRemoteState = useRef(false);
 
   const isHost = room.users.find(user => user.id === socket.id)?.isHost || false;
@@ -53,8 +62,15 @@ function VideoPlayer({ room, setRoom }) {
     const handleTimeUpdate = () => {
       if (videoElement.duration) {
         setPlaybackProgress((videoElement.currentTime / videoElement.duration) * 100);
+        setCurrentTime(videoElement.currentTime);
       }
     };
+
+    const handleDurationChange = () => {
+        if (videoElement.duration) {
+            setDuration(videoElement.duration);
+        }
+    }
     
     const handleProgress = () => {
       if (videoElement.duration && videoElement.buffered.length > 0) {
@@ -65,10 +81,13 @@ function VideoPlayer({ room, setRoom }) {
 
     videoElement.addEventListener('timeupdate', handleTimeUpdate);
     videoElement.addEventListener('progress', handleProgress);
+    videoElement.addEventListener('durationchange', handleDurationChange);
+
 
     return () => {
       videoElement.removeEventListener('timeupdate', handleTimeUpdate);
       videoElement.removeEventListener('progress', handleProgress);
+      videoElement.removeEventListener('durationchange', handleDurationChange);
     };
   }, []);
 
@@ -90,7 +109,6 @@ function VideoPlayer({ room, setRoom }) {
     const seekRatio = clickPosition / progressBarWidth;
     const seekTime = videoRef.current.duration * seekRatio;
     
-    // Set the time locally and emit event to sync others
     videoRef.current.currentTime = seekTime;
     socket.emit('sync-state', { roomId: room.id, newState: { ...room, videoTime: seekTime } });
   };
@@ -117,49 +135,54 @@ function VideoPlayer({ room, setRoom }) {
     }
   };
 
-  const styles = {
-    container: { position: 'relative', backgroundColor: 'black', width: PLAYER_SIZES[playerSize], margin: '0 auto' },
-    controlsOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, opacity: (showControls || !room.isPlaying) ? 1 : 0, transition: 'opacity 0.3s' },
-    progressBarContainer: { width: '100%', height: '10px', backgroundColor: 'rgba(255,255,255,0.3)', cursor: 'pointer', position: 'relative' },
-    bufferBar: { position: 'absolute', height: '100%', backgroundColor: 'rgba(255,255,255,0.5)', width: `${bufferProgress}%` },
-    playbackBar: { position: 'absolute', height: '100%', backgroundColor: '#646cff', width: `${playbackProgress}%` },
-    bottomControls: { padding: '10px', backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', justifyContent: 'space-between' },
-    controlsGroup: { display: 'flex', alignItems: 'center', gap: '10px' }
-  };
-
   return (
-    <div>
-      <h1>Room: {room.id}</h1>
-      <p>{room.users.length} user(s) online.</p>
+    <div className="room-container">
+      <header className="room-header">
+        <div className="room-info">
+            <h2>Room: {room.id}</h2>
+            <span className="user-count">{room.users.length} user(s) online</span>
+        </div>
+        <button onClick={onLeaveRoom} className="btn-secondary">Leave Room</button>
+      </header>
       
       {isHost && <HostControls onSetVideo={handleSetVideo} />}
 
-      {room.videoUrl ? (
-        <div ref={playerContainerRef} style={styles.container} onMouseEnter={() => setShowControls(true)} onMouseLeave={() => setShowControls(false)}>
-          <video ref={videoRef} src={room.videoUrl} width="100%" preload="metadata" onClick={!room.isPlaying ? handlePlayRequest : handlePauseRequest}>
-            Your browser does not support the video tag.
-          </video>
-          
-          <div style={styles.controlsOverlay}>
-            <div style={styles.progressBarContainer} onClick={handleSeek}>
-              <div style={styles.bufferBar}></div>
-              <div style={styles.playbackBar}></div>
-            </div>
-            <div style={styles.bottomControls}>
-              <div style={styles.controlsGroup}>
-                  {!room.isPlaying ? <button onClick={handlePlayRequest}>Play</button> : <button onClick={handlePauseRequest}>Pause</button>}
+      <div className="room-main-content">
+        <div className="video-section">
+            {room.videoUrl ? (
+            <div ref={playerContainerRef} className="video-player-container" onMouseEnter={() => setShowControls(true)} onMouseLeave={() => setShowControls(false)}>
+              <video ref={videoRef} src={room.videoUrl} width="100%" preload="metadata" onClick={!room.isPlaying ? handlePlayRequest : handlePauseRequest}>
+                Your browser does not support the video tag.
+              </video>
+              
+              <div className={`controls-overlay ${showControls || !room.isPlaying ? 'visible' : ''}`}>
+                <div className="progress-bar-container" onClick={handleSeek}>
+                  <div className="buffer-bar" style={{width: `${bufferProgress}%`}}></div>
+                  <div className="playback-bar" style={{width: `${playbackProgress}%`}}></div>
+                </div>
+                <div className="bottom-controls">
+                    <div className="controls-group left">
+                        <button className="control-button" onClick={!room.isPlaying ? handlePlayRequest : handlePauseRequest}>
+                            {room.isPlaying ? 'Pause' : 'Play'}
+                        </button>
+                        <span className="time-display">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                    </div>
+                    <div className="controls-group right">
+                        <button className="control-button" onClick={handleFullscreen}>Fullscreen</button>
+                    </div>
+                </div>
               </div>
-              <div style={styles.controlsGroup}>
-                  <span>Size:</span>
-                  <button onClick={() => setPlayerSize('small')}>S</button>
-                  <button onClick={() => setPlayerSize('medium')}>M</button>
-                  <button onClick={() => setPlayerSize('large')}>L</button>
-                  <button onClick={handleFullscreen}>Fullscreen</button>
-              </div>
             </div>
-          </div>
+          ) : ( 
+            <div className="no-video-placeholder">
+                <p>The host needs to set a video URL.</p>
+            </div>
+          )}
         </div>
-      ) : ( <p>The host needs to set a video URL.</p> )}
+        <div className="user-list-section">
+            <UserList users={room.users} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -167,9 +190,9 @@ function VideoPlayer({ room, setRoom }) {
 const HostControls = ({ onSetVideo }) => {
     const [videoUrlInput, setVideoUrlInput] = useState('');
     return (
-        <div style={{margin: '10px 0'}}>
-          <input type="text" value={videoUrlInput} onChange={(e) => setVideoUrlInput(e.target.value)} placeholder="Enter direct video URL" style={{width: "300px"}}/>
-          <button onClick={() => onSetVideo(videoUrlInput)}>Set Video</button>
+        <div className="host-controls">
+          <input type="text" value={videoUrlInput} onChange={(e) => setVideoUrlInput(e.target.value)} placeholder="Enter direct video URL"/>
+          <button onClick={() => onSetVideo(videoUrlInput)} className="btn-primary">Set Video</button>
         </div>
     );
 };
