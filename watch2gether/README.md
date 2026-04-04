@@ -107,7 +107,7 @@ This project can be deployed for free using services like Vercel (for the fronte
     *   In `frontend/src/socket.js`, change the following line:
         ```javascript
         // const socket = io("http://localhost:3001");
-        const socket = io("YOUR_RENDER_BACKEND_URL"); // Replace with your actual backend URL
+        const socket = io("https://watch2gether-backend-sjgr.onrender.com/"); 
         ```
 2.  **Push to GitHub:** Commit and push the updated `socket.js` file to your GitHub repository.
 3.  **Create a Vercel Account:** Sign up for a free account at [vercel.com](https://vercel.com/).
